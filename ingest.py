@@ -16,7 +16,7 @@ def load_and_split_pdfs(pdf_folder):
     documents = []
     product_names = []
 
-    for filename in tqdm(os.listdir(pdf_folder), desc="🔍 Loading PDFs"):
+    for filename in tqdm(os.listdir(pdf_folder), desc=" Loading PDFs"):
         if filename.endswith(".pdf"):
             try:
                 product_name = filename.split()[0].lower()  
@@ -61,3 +61,4 @@ if __name__ == "__main__":
     docs, product_names = load_and_split_pdfs(PDF_FOLDER)
     embed_and_store(docs, INDEX_FOLDER)
     save_product_list(product_names, PRODUCT_LIST_JSON)
+
