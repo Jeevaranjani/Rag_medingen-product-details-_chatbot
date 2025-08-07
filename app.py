@@ -20,7 +20,7 @@ st.markdown("Ask questions based on Medingen's product details")
 # Load index
 vectorstore = load_vectorstore()
 
-# ✅ Load product list dynamically from product_list.json
+#  Load product list dynamically from product_list.json
 with open("product_list.json", "r") as f:
     available_products = json.load(f)
 available_products.insert(0, "none")
@@ -53,9 +53,10 @@ if query:
     results = vectorstore.similarity_search(query, k=3, filter=metadata_filter)
 
     if results:
-        st.markdown("### 📄 Top Matches:")
+        st.markdown("📄 Top Matches:")
         for i, doc in enumerate(results, 1):
             st.markdown(f"**Match {i} (Product: {doc.metadata.get('product', 'N/A')}):**")
             st.write(doc.page_content[:500] + "...")
     else:
         st.warning(f"No relevant information found for **'{query}'** in **'{product_filter}'**")
+
