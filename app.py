@@ -20,14 +20,10 @@ st.markdown("Ask questions based on Medingen's product details")
 # Load index
 vectorstore = load_vectorstore()
 
-<<<<<<< HEAD
-# Load product list dynamically from product_list.json
-=======
-#  Load product list dynamically from product_list.json
->>>>>>> a6f296a0ad9be2c3e04ad39e65a275b299bb66f7
 with open("product_list.json", "r") as f:
     available_products = json.load(f)
 available_products.insert(0, "none")
+
 
 # Product selector UI
 product_filter = st.selectbox("🧪 Filter by product :", available_products)
