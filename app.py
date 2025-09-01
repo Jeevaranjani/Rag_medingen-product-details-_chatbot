@@ -51,6 +51,7 @@ if query:
 
     # Perform search
     results = vectorstore.similarity_search(query, k=3, filter=metadata_filter)
+    
 
     if results:
         st.markdown("📄 Top Matches:")
@@ -59,4 +60,6 @@ if query:
             st.write(doc.page_content[:500] + "...")
     else:
         st.warning(f"No relevant information found for **'{query}'** in **'{product_filter}'**")
+
+
 

@@ -61,4 +61,3 @@ if __name__ == "__main__":
     docs, product_names = load_and_split_pdfs(PDF_FOLDER)
     embed_and_store(docs, INDEX_FOLDER)
     save_product_list(product_names, PRODUCT_LIST_JSON)
-
