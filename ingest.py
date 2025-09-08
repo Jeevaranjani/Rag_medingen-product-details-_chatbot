@@ -14,26 +14,49 @@ PRODUCT_LIST_JSON = "product_list.json"
 
 def load_and_split_pdfs(pdf_folder):
     documents = []
-    product_names = []
+    catmap = {}
 
     for filename in tqdm(os.listdir(pdf_folder), desc=" Loading PDFs"):
         if filename.endswith(".pdf"):
             try:
-                product_name = filename.split()[0].lower()  
-                product_names.append(product_name)
+                # remove extension and normalize
+                name = os.path.splitext(filename)[0].lower()
 
+                # split filename into words
+                words = name.split()
+
+                # assume last word (or last two words) is category
+                if len(words) > 1:
+                    category = words[-1]
+                    # special case: handle two-word categories like "eye drop"
+                    if words[-2] == "eye":
+                        category = " ".join(words[-2:])
+                else:
+                    category = "general"
+
+                # product name = everything except category
+                product = name.replace(category, "").strip()
+
+                # build catmap
+                catmap.setdefault(category, [])
+                if product not in catmap[category]:
+                    catmap[category].append(product)
+
+                # load pdf
                 loader = PyPDFLoader(os.path.join(pdf_folder, filename))
                 docs = loader.load()
 
                 for doc in docs:
-                    doc.metadata["product"] = product_name
+                    doc.metadata["product"] = product
+                    doc.metadata["category"] = category
 
                 documents.extend(docs)
-                print(f"Loaded and tagged: {filename}")
+                print(f"Loaded and tagged: {filename} → product='{product}', category='{category}'")
             except Exception as e:
                 print(f"Error loading {filename}: {e}")
 
-    return documents, sorted(set(product_names))
+    return documents, catmap
+
 
 def embed_and_store(documents, index_folder):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
@@ -52,12 +75,13 @@ def embed_and_store(documents, index_folder):
     vectorstore.save_local(index_folder)
     print(f"FAISS index saved to: {index_folder}")
 
-def save_product_list(product_names, output_file):
+def save_product_list(catmap, output_file):
     with open(output_file, "w") as f:
-        json.dump(product_names, f)
+        json.dump(catmap, f, indent=2)
     print(f"Product list saved to: {output_file}")
 
+
 if __name__ == "__main__":
-    docs, product_names = load_and_split_pdfs(PDF_FOLDER)
+    docs, catmap = load_and_split_pdfs(PDF_FOLDER)
     embed_and_store(docs, INDEX_FOLDER)
-    save_product_list(product_names, PRODUCT_LIST_JSON)
+    save_product_list(catmap, PRODUCT_LIST_JSON)
