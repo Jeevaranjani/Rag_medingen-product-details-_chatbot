@@ -7,7 +7,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 
 # Path setup
-PDF_FOLDER = r"C:\Users\djeev\rag_medingen_chatbot\medingen_pdfs"
+PDF_FOLDER = r"C:\Users\djeev\Rag_medingen-product-details-_chatbot\medingen_pdfs"
 INDEX_FOLDER = r"C:\Users\djeev\rag_medingen_chatbot\faiss_index"
 PRODUCT_LIST_JSON = "product_list.json"
 
