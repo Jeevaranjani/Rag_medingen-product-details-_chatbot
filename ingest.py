@@ -10,8 +10,8 @@ from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.docstore.document import Document
 
 
-PDF_FOLDER = r"C:\Users\djeev\Rag_medingen-product-details-_chatbot\medingen_pdfs"
-INDEX_FOLDER = r"C:\Users\djeev\Rag_medingen-product-details-_chatbot\faiss_index\index.faiss"
+PDF_FOLDER = "medingen_pdfs"
+INDEX_FOLDER = "faiss_index"
 PRODUCT_LIST_JSON = "product_list.json"
 
 SECTION_PATTERNS = [

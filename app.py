@@ -6,9 +6,11 @@ from typing import List, Tuple
 from langchain.document_loaders import PyPDFLoader
 from langchain.vectorstores import FAISS
 from langchain.embeddings import HuggingFaceEmbeddings
+import os
+from pathlib import Path
 
-INDEX_FOLDER = r"C:\Users\djeev\Rag_medingen-product-details-_chatbot\faiss_index\index.faiss"
-PRODUCT_LIST_JSON = "product_list.json"
+INDEX_FOLDER = Path(os.environ.get("FAISS_INDEX_PATH", "faiss_index"))
+PRODUCT_LIST_JSON = Path("product_list.json")
 
 SIMILARITY_THRESHOLD = 0.45
 SEARCH_K = 12
