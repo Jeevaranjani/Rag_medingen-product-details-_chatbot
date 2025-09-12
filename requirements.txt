@@ -5,3 +5,5 @@ sentence-transformers
 tqdm
 PyPDF2
 python-dotenv
+langchain-community
+langchain-huggingface
