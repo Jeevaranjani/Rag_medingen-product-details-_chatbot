@@ -226,7 +226,7 @@ if selected_product == "none":
     st.info("Select a product to enable querying.")
     st.stop()
 
-query = st.text_input("🔍 Ask your question below:", placeholder="e.g., What are the side effects?")
+query = st.text_input("🔍 Ask your question below:", placeholder="e.g.,Ask your query")
 
 if query:
     q_original = query.strip()
