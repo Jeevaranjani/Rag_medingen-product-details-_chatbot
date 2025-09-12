@@ -11,7 +11,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 
 # Use relative paths so the app can run both locally and on Streamlit Cloud
 PDF_FOLDER = "medingen_pdfs"
-INDEX_DIR = "faiss_index"           # <-- directory (not index file)
+INDEX_DIR = "faiss_index"        
 PRODUCT_LIST_JSON = "product_list.json"
 
 SECTION_PATTERNS = [
