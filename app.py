@@ -277,7 +277,7 @@ if selected_product == "none":
     st.stop()
 
 # Query input
-query = st.text_input("🔍 Ask your question below:", placeholder="e.g., What are the benefits? What are the side effects?")
+query = st.text_input("🔍 Ask your question below:", placeholder="Ask your Query")
 
 if query:
     q_original = query.strip()
