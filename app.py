@@ -350,15 +350,4 @@ if query:
         else:
             st.info("ℹ️ No specific information found for your question. Please try rephrasing or ask about benefits, side effects, or dosage.")
 
-    # Debug information (optional - can be removed in production)
-    with st.expander("🔧 Debug Information", expanded=False):
-        st.write(f"**Query:** {q_original}")
-        st.write(f"**Detected Intent:** {section_intent}")
-        st.write(f"**Product:** {selected_product}")
-        st.write(f"**Documents Retrieved:** {len(filtered)}")
-        
-        if filtered:
-            st.write("**Top Document Sections:**")
-            for i, (doc, score) in enumerate(filtered[:3]):
-                section = doc.metadata.get("section", "unknown")
-                st.write(f"  {i+1}. Section: {section}, Score: {score}")
+    
