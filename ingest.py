@@ -11,7 +11,7 @@ from langchain.docstore.document import Document
 
 
 PDF_FOLDER = r"C:\Users\djeev\Rag_medingen-product-details-_chatbot\medingen_pdfs"
-INDEX_FOLDER = r"C:\Users\djeev\rag_medingen_chatbot\faiss_index"
+INDEX_FOLDER = r"C:\Users\djeev\Rag_medingen-product-details-_chatbot\faiss_index\index.faiss"
 PRODUCT_LIST_JSON = "product_list.json"
 
 SECTION_PATTERNS = [
