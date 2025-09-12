@@ -1,27 +1,11 @@
-{
-  "syrup": [
-    "aayurbest yurbest cough  cough"
-  ],
-  "eye drop": [
-    "alcaft"
-  ],
-  "ointment": [
-    "bysalic"
-  ],
-  "suspension": [
-    "calbolic b12"
-  ],
-  "capsule": [
-    "caricabest"
-  ],
-  "soap": [
-    "ket ketokem soft okem soft"
-  ],
-  "cream": [
-    "melacare"
-  ],
-  "tablet": [
-    "olercare olercare",
-    "paracetamol"
-  ]
-}
+[
+  "aayurbest",
+  "alcaft",
+  "bysalic",
+  "calbolic",
+  "caricabest",
+  "ket",
+  "melacare",
+  "olercare",
+  "paracetamol"
+]

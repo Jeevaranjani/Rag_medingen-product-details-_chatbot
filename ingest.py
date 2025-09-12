@@ -1,87 +1,115 @@
+
 import os
 import json
+import re
 from tqdm import tqdm
 from langchain_community.document_loaders import PyPDFLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.docstore.document import Document
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 
-# Path setup
 PDF_FOLDER = r"C:\Users\djeev\Rag_medingen-product-details-_chatbot\medingen_pdfs"
 INDEX_FOLDER = r"C:\Users\djeev\rag_medingen_chatbot\faiss_index"
 PRODUCT_LIST_JSON = "product_list.json"
 
+SECTION_PATTERNS = [
+    r"^\s*(side\s*effects|adverse\s*reactions|adverse\s*events)\b[:\-]?\s*$",
+    r"^\s*(benefits|indications|uses|what\s+is\s+it\s+used\s+for)\b[:\-]?\s*$",
+    r"^\s*(dosage|dose|administration|when\s+to\s+take|when\s+should\s+i)\b[:\-]?\s*$",
+    r"^\s*(contraindications|warnings|precautions)\b[:\-]?\s*$",
+    r"^\s*(composition|ingredients)\b[:\-]?\s*$",
+]
 
-def load_and_split_pdfs(pdf_folder):
+CHUNK_SIZE = 900
+STRIDE = 450
+
+
+class SectionSplitter:
+    def __init__(self, section_patterns=None, chunk_size=CHUNK_SIZE, stride=STRIDE):
+        self.section_regexes = [re.compile(p, re.IGNORECASE | re.MULTILINE) for p in (section_patterns or SECTION_PATTERNS)]
+        self.chunk_size = chunk_size
+        self.stride = stride
+
+    def _find_headings(self, text):
+        headings = []
+        for m in re.finditer(r"(?m)^[^\n]+$", text):
+            line = m.group(0).strip()
+            for rx in self.section_regexes:
+                mo = rx.match(line)
+                if mo:
+                    heading_name = mo.group(1).strip().lower()
+                    headings.append((m.start(), heading_name))
+                    break
+        return headings
+
+    def split_documents(self, documents):
+        chunks = []
+        for doc in documents:
+            text = doc.page_content or ""
+            page_no = doc.metadata.get("page_number") or doc.metadata.get("page", None)
+            headings = self._find_headings(text)
+            if headings:
+                for i, (pos, heading_name) in enumerate(headings):
+                    start = pos
+                    end = headings[i + 1][0] if i + 1 < len(headings) else len(text)
+                    span_text = text[start:end].strip()
+                    if span_text:
+                        meta = dict(doc.metadata or {})
+                        meta.update({"section": heading_name, "page": page_no})
+                        chunks.append(Document(page_content=span_text, metadata=meta))
+            else:
+                start = 0
+                while start < len(text):
+                    end = min(start + self.chunk_size, len(text))
+                    chunk_text = text[start:end].strip()
+                    if chunk_text:
+                        meta = dict(doc.metadata or {})
+                        meta.update({"section": "general", "page": page_no})
+                        chunks.append(Document(page_content=chunk_text, metadata=meta))
+                    start += self.stride
+        return chunks
+
+
+def load_and_prepare_pdfs(pdf_folder):
     documents = []
-    catmap = {}
-
-    for filename in tqdm(os.listdir(pdf_folder), desc=" Loading PDFs"):
-        if filename.endswith(".pdf"):
-            try:
-                # remove extension and normalize
-                name = os.path.splitext(filename)[0].lower()
-
-                # split filename into words
-                words = name.split()
-
-                # assume last word (or last two words) is category
-                if len(words) > 1:
-                    category = words[-1]
-                    # special case: handle two-word categories like "eye drop"
-                    if words[-2] == "eye":
-                        category = " ".join(words[-2:])
-                else:
-                    category = "general"
-
-                # product name = everything except category
-                product = name.replace(category, "").strip()
-
-                # build catmap
-                catmap.setdefault(category, [])
-                if product not in catmap[category]:
-                    catmap[category].append(product)
-
-                # load pdf
-                loader = PyPDFLoader(os.path.join(pdf_folder, filename))
-                docs = loader.load()
-
-                for doc in docs:
-                    doc.metadata["product"] = product
-                    doc.metadata["category"] = category
-
-                documents.extend(docs)
-                print(f"Loaded and tagged: {filename} → product='{product}', category='{category}'")
-            except Exception as e:
-                print(f"Error loading {filename}: {e}")
-
-    return documents, catmap
+    product_names = []
+    for filename in tqdm(os.listdir(pdf_folder), desc="Loading PDFs"):
+        if not filename.lower().endswith(".pdf"):
+            continue
+        try:
+            product_name = filename.split()[0].lower()
+            product_names.append(product_name)
+            loader = PyPDFLoader(os.path.join(pdf_folder, filename))
+            pages = loader.load()
+            for i, page in enumerate(pages, start=1):
+                page.metadata = page.metadata or {}
+                page.metadata["product"] = product_name
+                page.metadata["page_number"] = i
+            documents.extend(pages)
+        except Exception as e:
+            print(f"Error loading {filename}: {e}")
+    return documents, sorted(set(product_names))
 
 
 def embed_and_store(documents, index_folder):
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    chunks = text_splitter.split_documents(documents)
-
+    splitter = SectionSplitter()
+    chunks = splitter.split_documents(documents)
     if not chunks:
-        print("No chunks created from documents. Check PDF content.")
+        print("No chunks created.")
         return
-
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     vectorstore = FAISS.from_documents(chunks, embeddings)
-
-    if not os.path.exists(index_folder):
-        os.makedirs(index_folder)
-
+    os.makedirs(index_folder, exist_ok=True)
     vectorstore.save_local(index_folder)
-    print(f"FAISS index saved to: {index_folder}")
+    print(f"Index saved to {index_folder}")
 
-def save_product_list(catmap, output_file):
+
+def save_product_list(product_names, output_file):
     with open(output_file, "w") as f:
-        json.dump(catmap, f, indent=2)
-    print(f"Product list saved to: {output_file}")
+        json.dump(product_names, f, indent=2)
 
 
 if __name__ == "__main__":
-    docs, catmap = load_and_split_pdfs(PDF_FOLDER)
+    docs, product_names = load_and_prepare_pdfs(PDF_FOLDER)
     embed_and_store(docs, INDEX_FOLDER)
-    save_product_list(catmap, PRODUCT_LIST_JSON)
+    save_product_list(product_names, PRODUCT_LIST_JSON)
