@@ -3,8 +3,9 @@ import streamlit as st
 import json
 import re
 from typing import List, Tuple
-from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain.document_loaders import PyPDFLoader
+from langchain.vectorstores import FAISS
+from langchain.embeddings import HuggingFaceEmbeddings
 
 INDEX_FOLDER = r"C:\Users\djeev\rag_medingen_chatbot\faiss_index"
 PRODUCT_LIST_JSON = "product_list.json"

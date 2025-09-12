@@ -3,10 +3,12 @@ import os
 import json
 import re
 from tqdm import tqdm
-from langchain_community.document_loaders import PyPDFLoader
+# Use these import replacements in both ingest.py and app.py
+from langchain.document_loaders import PyPDFLoader
+from langchain.vectorstores import FAISS
+from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.docstore.document import Document
-from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
+
 
 PDF_FOLDER = r"C:\Users\djeev\Rag_medingen-product-details-_chatbot\medingen_pdfs"
 INDEX_FOLDER = r"C:\Users\djeev\rag_medingen_chatbot\faiss_index"
