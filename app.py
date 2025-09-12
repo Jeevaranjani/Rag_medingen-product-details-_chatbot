@@ -1,4 +1,3 @@
-
 import streamlit as st
 import json
 import re
@@ -19,7 +18,7 @@ RETURN_TOP_K = 3
 SECTION_KEYWORDS = {
     "side effects": ["side effect", "side-effects", "adverse reaction", "adverse event", "nausea", "vomit", "vomiting", "rash", "itch", "dizziness", "headache", "constipation", "insomnia", "fatigue", "allergic", "allergy", "swelling"],
     "dosage": ["dose", "dosage", "take", "when to take", "intake", "before", "after", "daily", "every", "hour", "hr"],
-    "benefits": ["benefit", "benefits", "use", "indication", "how it works", "used for", "helps", "relief", "treats", "manage", "reduces"],
+    "benefits": ["benefit", "benefits", "use", "indication", "how it works", "used for", "relieve", "relieves", "treats", "helps"],
 }
 
 GREETINGS = {"hi", "hello", "hey", "hii", "hiya"}
@@ -71,7 +70,6 @@ def _looks_like_heading_noise(s: str) -> bool:
     tokens = re.findall(r"\w+", s.lower())
     if len(tokens) <= 2:
         return True
-    # count section label-like occurrences
     section_tokens = 0
     for label_keys in SECTION_KEYWORDS.values():
         for k in label_keys:
@@ -86,26 +84,21 @@ def _looks_like_heading_noise(s: str) -> bool:
     return False
 
 
-def _prioritize_docs_by_section(docs: List, section_intent: str) -> List:
-    """Return prioritized list of docs: those with metadata.section matching intent first."""
-    if not section_intent:
-        return docs
-    prioritized = []
-    fallback = []
+def extract_side_effect_sentences_from_docs(docs: List, top_n=6) -> List[str]:
+    symptom_keywords = set(kw.lower() for kw in SECTION_KEYWORDS["side effects"])
+    prioritized_docs = []
+    fallback_docs = []
     for d in docs:
         sec = (d.metadata or {}).get("section", "") or ""
-        if section_intent in sec:
-            prioritized.append(d)
+        sec = sec.lower()
+        if "side" in sec or "effect" in sec or "adverse" in sec:
+            prioritized_docs.append(d)
         else:
-            fallback.append(d)
-    return prioritized + fallback
+            fallback_docs.append(d)
+    search_docs = prioritized_docs if prioritized_docs else docs
 
-
-def extract_side_effect_sentences_from_docs(docs: List, top_n=4) -> List[str]:
-    symptom_keywords = set(kw.lower() for kw in SECTION_KEYWORDS["side effects"])
-    docs_ordered = _prioritize_docs_by_section(docs, "side effects")
     candidates = []
-    for d in docs_ordered:
+    for d in search_docs:
         text = (d.page_content or "").strip()
         for s in split_sentences(text):
             if _looks_like_heading_noise(s):
@@ -115,7 +108,18 @@ def extract_side_effect_sentences_from_docs(docs: List, top_n=4) -> List[str]:
                 cleaned = re.sub(r'\b(benefits|how it works|side effects|expert\'s advice|frequently asked questions)\b', '', s, flags=re.IGNORECASE)
                 cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip()
                 candidates.append(cleaned)
-    # dedup and limit
+    if not candidates and prioritized_docs and fallback_docs:
+        for d in fallback_docs:
+            text = (d.page_content or "").strip()
+            for s in split_sentences(text):
+                if _looks_like_heading_noise(s):
+                    continue
+                sl = s.lower()
+                if any(kw in sl for kw in symptom_keywords) or "side effect" in sl or "adverse" in sl:
+                    cleaned = re.sub(r'\b(benefits|how it works|side effects|expert\'s advice|frequently asked questions)\b', '', s, flags=re.IGNORECASE)
+                    cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip()
+                    candidates.append(cleaned)
+
     seen = set()
     out = []
     for s in candidates:
@@ -128,35 +132,45 @@ def extract_side_effect_sentences_from_docs(docs: List, top_n=4) -> List[str]:
     return out
 
 
-def extract_benefit_sentences_from_docs(docs: List, top_n=4) -> List[str]:
+def extract_benefit_sentences_from_docs(docs: List, top_n=6) -> List[str]:
+    # Keywords to identify benefit/usage sentences
     benefit_keywords = set(kw.lower() for kw in SECTION_KEYWORDS["benefits"])
-    docs_ordered = _prioritize_docs_by_section(docs, "benefits")
+    prioritized_docs = []
+    fallback_docs = []
+    for d in docs:
+        sec = (d.metadata or {}).get("section", "") or ""
+        sec = sec.lower()
+        if "benefit" in sec or "indication" in sec or "use" in sec:
+            prioritized_docs.append(d)
+        else:
+            fallback_docs.append(d)
+    search_docs = prioritized_docs if prioritized_docs else docs
+
     candidates = []
-    for d in docs_ordered:
+    for d in search_docs:
         text = (d.page_content or "").strip()
         for s in split_sentences(text):
             if _looks_like_heading_noise(s):
                 continue
             sl = s.lower()
-            # Prefer sentences that contain benefit patterns or verbs indicating "helps/used for"
-            if any(kw in sl for kw in benefit_keywords) or re.search(r"\b(used for|helps|helps to|is used to|is used for|treats|relieves|relief|indication|used as|use for|recommended for)\b", sl):
-                cleaned = re.sub(r'\b(benefits|how it works|side effects|expert\'s advice|frequently asked questions)\b', '', s, flags=re.IGNORECASE)
+            # prefer sentences containing usage/benefit patterns
+            if (any(kw in sl for kw in benefit_keywords)
+                or re.search(r"\b(is used for|used to|indicated for|helps|relieve|relieves|treats|for pain|for fever|pain relief)\b", sl)):
+                cleaned = re.sub(r'\b(side effects|how it works|expert\'s advice|frequently asked questions)\b', '', s, flags=re.IGNORECASE)
                 cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip()
                 candidates.append(cleaned)
-    # If nothing found in prioritized docs, try fallback with relaxed condition (more general matching)
-    if not candidates:
-        for d in docs_ordered:
+    # fallback: broaden to any sentence in fallback docs that mentions 'used for' or 'is used'
+    if not candidates and fallback_docs:
+        for d in fallback_docs:
             text = (d.page_content or "").strip()
             for s in split_sentences(text):
                 if _looks_like_heading_noise(s):
                     continue
                 sl = s.lower()
-                # more relaxed: look for "used", "indication", "pain", "fever", "relief"
-                if any(w in sl for w in ["used", "indication", "pain", "fever", "relief", "reduces", "alleviate", "helps"]):
-                    cleaned = re.sub(r'\b(benefits|how it works|side effects|expert\'s advice|frequently asked questions)\b', '', s, flags=re.IGNORECASE)
-                    cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip()
+                if re.search(r"\b(is used for|used to|indicated for|helps|relieve|relieves|treats|for pain|for fever|pain relief)\b", sl):
+                    cleaned = re.sub(r'\s{2,}', ' ', s).strip()
                     candidates.append(cleaned)
-    # deduplicate and limit
+
     seen = set()
     out = []
     for s in candidates:
@@ -170,21 +184,12 @@ def extract_benefit_sentences_from_docs(docs: List, top_n=4) -> List[str]:
 
 
 def extract_concise_sentences_for_question(docs: List, question: str, section_intent: str, top_n=3) -> List[str]:
-    # For benefit / side effects requests, route to specialized extractors for accuracy
-    if section_intent == "side effects":
-        return extract_side_effect_sentences_from_docs(docs, top_n=top_n)
-    if section_intent == "benefits":
-        return extract_benefit_sentences_from_docs(docs, top_n=top_n)
-
-    # General fallback: score sentences but filter out heading noise
     candidates = []
     ql = question.lower()
     for d in docs:
         text = (d.page_content or "").strip()
         for s in split_sentences(text):
-            if _looks_like_heading_noise(s):
-                continue
-            sc = 0.0
+            sc = 0
             sl = s.lower()
             if section_intent and any(kw in sl for kw in SECTION_KEYWORDS.get(section_intent, [])):
                 sc += 3.0
@@ -201,9 +206,9 @@ def extract_concise_sentences_for_question(docs: List, question: str, section_in
     out = []
     for _, s in candidates:
         s_clean = re.sub(r'\s+', ' ', s).strip()
-        if s_clean and s_clean.lower() not in seen:
+        if s_clean not in seen:
             out.append(s_clean)
-            seen.add(s_clean.lower())
+            seen.add(s_clean)
         if len(out) >= top_n:
             break
     return out
@@ -260,7 +265,7 @@ if query:
         st.warning("No relevant information found for that product with your query.")
         st.stop()
 
-    # internal confidence check (no scores displayed)
+    # internal confidence check
     scores = [s for (_, s) in filtered if s is not None]
     if scores:
         s0 = scores[0]
@@ -273,12 +278,32 @@ if query:
                 st.warning("I couldn't find good evidence. Please rephrase.")
                 st.stop()
 
-    # prepare top docs (prefer docs with better scores first when available)
     filtered_sorted = sorted(filtered, key=lambda x: (x[1] is not None, x[1] or 0), reverse=True) if any(s is not None for (_, s) in filtered) else filtered
     top_docs = [d for (d, _) in filtered_sorted][:RETURN_TOP_K]
 
-    # Use improved extractor (handles benefits & side effects specifically)
-    concise = extract_concise_sentences_for_question(top_docs, q_original, section_intent, top_n=6)
+    # If user intent is specifically side effects or benefits, use the dedicated extractors
+    if section_intent == "side effects":
+        side_sentences = extract_side_effect_sentences_from_docs(top_docs, top_n=6)
+        if not side_sentences:
+            st.info("No side effects information found in the documents for this product.")
+            st.stop()
+        st.markdown("### Answer:")
+        for s in side_sentences:
+            st.write("- " + s)
+        st.stop()
+
+    if section_intent == "benefits":
+        benefit_sentences = extract_benefit_sentences_from_docs(top_docs, top_n=6)
+        if not benefit_sentences:
+            st.info("No benefits information found in the documents for this product.")
+            st.stop()
+        st.markdown("### Answer:")
+        for s in benefit_sentences:
+            st.write("- " + s)
+        st.stop()
+
+    # fallback: general concise extraction
+    concise = extract_concise_sentences_for_question(top_docs, q_original, section_intent, top_n=3)
     if not concise:
         st.info("No concise information found in the documents for that question.")
         st.stop()

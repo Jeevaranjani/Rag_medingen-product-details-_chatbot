@@ -1,4 +1,3 @@
-
 import os
 import json
 import re
@@ -9,9 +8,8 @@ from langchain.docstore.document import Document
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 
-# Use relative paths so the app can run both locally and on Streamlit Cloud
 PDF_FOLDER = "medingen_pdfs"
-INDEX_DIR = "faiss_index"        
+INDEX_DIR = "faiss_index"
 PRODUCT_LIST_JSON = "product_list.json"
 
 SECTION_PATTERNS = [
@@ -103,7 +101,7 @@ def embed_and_store(documents, index_dir):
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     vectorstore = FAISS.from_documents(chunks, embeddings)
     os.makedirs(index_dir, exist_ok=True)
-    vectorstore.save_local(index_dir)   # writes index.faiss and index.pkl inside index_dir
+    vectorstore.save_local(index_dir)
     print(f"Index saved to {index_dir}")
 
 
