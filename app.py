@@ -17,7 +17,7 @@ SEARCH_K = 12
 RETURN_TOP_K = 3
 
 SECTION_KEYWORDS = {
-    "side effects": ["side effect", "side-effects", "adverse reaction", "adverse event", "nausea", "vomit", "vomiting", "rash", "itch", "dizziness", "headache", "constipation"],
+    "side effects": ["side effect", "side-effects", "adverse reaction", "adverse event", "nausea", "vomit", "vomiting", "vomitings", "rash", "itch", "dizziness", "headache", "constipation", "insomnia", "fatigue", "allergic", "allergy", "swelling"],
     "dosage": ["dose", "dosage", "take", "when to take", "intake", "before", "after", "daily", "every", "hour", "hr"],
     "benefits": ["benefit", "benefits", "use", "indication", "how it works"],
 }
@@ -67,28 +67,96 @@ def split_sentences(text: str) -> List[str]:
     return [s.strip() for s in sentences if s.strip()]
 
 
+def _looks_like_heading_noise(s: str) -> bool:
+    """
+    Heuristic to detect heading/title noise lines such as:
+      "Benefits How It Works Side Effects Expert's Advice"
+    Returns True for such lines so they can be excluded.
+    """
+    # too short OR contains many section labels concatenated
+    tokens = re.findall(r"\w+", s.lower())
+    if len(tokens) <= 2:
+        return True
+    # if a sentence contains multiple section label keywords, treat as noise
+    section_tokens = 0
+    for label_keys in SECTION_KEYWORDS.values():
+        for k in label_keys:
+            if k in s.lower():
+                section_tokens += 1
+    if section_tokens >= 2:
+        return True
+    # if more than half the tokens are title-like (all lower/upper isn't reliable),
+    # check for sequences of known label words "benefits", "how", "works", "side", "effects"
+    known_labels = ["benefits", "how", "works", "side", "effects", "expert", "advice", "frequently", "asked", "questions"]
+    count_label_like = sum(1 for t in tokens if t in known_labels)
+    if count_label_like / max(1, len(tokens)) > 0.4:
+        return True
+    return False
+
+
 def extract_side_effect_sentences_from_docs(docs: List, top_n=4) -> List[str]:
-    candidates = []
+    """
+    Prefer sentences mentioning concrete symptoms/adverse events.
+    Prefer docs whose metadata.section indicates side effects.
+    Exclude heading-noise lines.
+    """
+    # symptom/adverse keywords (expanded) to ensure we extract real side effect lines
+    symptom_keywords = set(kw.lower() for kw in SECTION_KEYWORDS["side effects"])
+
+    # prioritize docs whose metadata.section contains 'side' or 'effect'
+    prioritized_docs = []
+    fallback_docs = []
     for d in docs:
+        sec = (d.metadata or {}).get("section", "") or ""
+        sec = sec.lower()
+        if "side" in sec or "effect" in sec or "adverse" in sec:
+            prioritized_docs.append(d)
+        else:
+            fallback_docs.append(d)
+    search_docs = prioritized_docs if prioritized_docs else docs
+
+    candidates = []
+    for d in search_docs:
         text = (d.page_content or "").strip()
         for s in split_sentences(text):
             sl = s.lower()
-            if any(kw in sl for kw in SECTION_KEYWORDS["side effects"]):
-                candidates.append(s.strip())
+            # exclude heading/noise lines
+            if _looks_like_heading_noise(s):
+                continue
+            # require at least one symptom/adverse keyword
+            if any(kw in sl for kw in symptom_keywords) or "side effect" in sl or "adverse" in sl:
+                # remove repeated heading fragments that may be inline (clean up)
+                cleaned = re.sub(r'\b(benefits|how it works|side effects|expert\'s advice|frequently asked questions)\b', '', s, flags=re.IGNORECASE)
+                cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip()
+                candidates.append(cleaned)
+    # if prioritized search yields nothing, look in fallback docs but still require symptom keywords
+    if not candidates and prioritized_docs and fallback_docs:
+        for d in fallback_docs:
+            text = (d.page_content or "").strip()
+            for s in split_sentences(text):
+                sl = s.lower()
+                if _looks_like_heading_noise(s):
+                    continue
+                if any(kw in sl for kw in symptom_keywords) or "side effect" in sl or "adverse" in sl:
+                    cleaned = re.sub(r'\b(benefits|how it works|side effects|expert\'s advice|frequently asked questions)\b', '', s, flags=re.IGNORECASE)
+                    cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip()
+                    candidates.append(cleaned)
+
     # deduplicate preserving order
     seen = set()
     out = []
     for s in candidates:
         s_clean = re.sub(r'\s+', ' ', s).strip()
-        if s_clean not in seen:
+        if s_clean and s_clean.lower() not in seen:
             out.append(s_clean)
-            seen.add(s_clean)
+            seen.add(s_clean.lower())
         if len(out) >= top_n:
             break
     return out
 
 
 def extract_concise_sentences_for_question(docs: List, question: str, section_intent: str, top_n=3) -> List[str]:
+    # unchanged behavior (kept minimal)
     candidates = []
     ql = question.lower()
     for d in docs:
@@ -187,16 +255,17 @@ if query:
     filtered_sorted = sorted(filtered, key=lambda x: (x[1] is not None, x[1] or 0), reverse=True) if any(s is not None for (_, s) in filtered) else filtered
     top_docs = [d for (d, _) in filtered_sorted][:RETURN_TOP_K]
 
-    # If intent is side effects: return only side-effect sentences (concise), no supporting evidence shown
+    # If intent is side effects: return only side-effect details (concise)
     if section_intent == "side effects":
+        # Use the improved extractor which prioritizes section-labeled chunks and requires symptom keywords
         side_sentences = extract_side_effect_sentences_from_docs(top_docs, top_n=6)
         if not side_sentences:
             st.info("No side effects information found in the documents for this product.")
-        else:
-            # Combine into a short, readable block
-            answer = " ".join(side_sentences)
-            st.markdown("### Answer:")
-            st.write(answer)
+            st.stop()
+        # Present each sentence on its own line for readability
+        st.markdown("### Answer:")
+        for s in side_sentences:
+            st.write("- " + s)
         st.stop()
 
     # For other intents: attempt concise extraction (no supporting evidence)
@@ -205,6 +274,6 @@ if query:
         st.info("No concise information found in the documents for that question.")
         st.stop()
 
-    answer = " ".join(concise)
     st.markdown("### Answer:")
-    st.write(answer)
+    for s in concise:
+        st.write("- " + s)
