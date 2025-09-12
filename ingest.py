@@ -8,16 +8,19 @@ from langchain.docstore.document import Document
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 
+# Relative paths for portability
 PDF_FOLDER = "medingen_pdfs"
 INDEX_DIR = "faiss_index"
 PRODUCT_LIST_JSON = "product_list.json"
 
+# Expanded section patterns to better detect headings found in real PDFs
 SECTION_PATTERNS = [
     r"^\s*(side\s*effects|adverse\s*reactions|adverse\s*events)\b[:\-]?\s*$",
-    r"^\s*(benefits|indications|uses|what\s+is\s+it\s+used\s+for)\b[:\-]?\s*$",
-    r"^\s*(dosage|dose|administration|when\s+to\s+take|when\s+should\s+i)\b[:\-]?\s*$",
+    r"^\s*(benefits|indications|indication(s)?|uses|use(s)?|what\s+is\s+it\s+used\s+for|therapeutic\s+indications)\b[:\-]?\s*$",
+    r"^\s*(dosage|dose|administration|direction(s)?\s+for\s+use|when\s+to\s+take|when\s+should\s+i)\b[:\-]?\s*$",
     r"^\s*(contraindications|warnings|precautions)\b[:\-]?\s*$",
     r"^\s*(composition|ingredients)\b[:\-]?\s*$",
+    r"^\s*(how\s+it\s+works|pharmacology)\b[:\-]?\s*$",
 ]
 
 CHUNK_SIZE = 900
@@ -26,7 +29,9 @@ STRIDE = 450
 
 class SectionSplitter:
     def __init__(self, section_patterns=None, chunk_size=CHUNK_SIZE, stride=STRIDE):
-        self.section_regexes = [re.compile(p, re.IGNORECASE | re.MULTILINE) for p in (section_patterns or SECTION_PATTERNS)]
+        self.section_regexes = [
+            re.compile(p, re.IGNORECASE | re.MULTILINE) for p in (section_patterns or SECTION_PATTERNS)
+        ]
         self.chunk_size = chunk_size
         self.stride = stride
 
